@@ -2,7 +2,7 @@
   description = "A flake containing useful tools for building Elm applications with Nix.";
 
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-unstable";
+    nixpkgs.url = "nixpkgs/nixos-25.11";
 
     elm-spa = {
       url = "github:jeslie0/elm-spa";
@@ -47,7 +47,7 @@
         import ./nix/mkElmDerivation.nix {
           inherit stdenv lib allPackagesJsonPath elmHashesJsonPath;
           elm = elmPackages.elm;
-          uglify-js = nodePackages.uglify-js;
+          terser = nodePackages.terser;
           snapshot = snapshot system;
         };
     in
@@ -61,8 +61,10 @@
         default = final: prev:
           prev.lib.composeManyExtensions
             (builtins.attrValues
-              (builtins.removeAttrs self.overlays ["default"])
-            ) final prev;
+              (builtins.removeAttrs self.overlays [ "default" ])
+            )
+            final
+            prev;
 
         mkElmDerivation = final: prev: {
           mkElmDerivation = mkElmDerivation prev;
@@ -105,34 +107,34 @@
               haskellPackages =
                 pkgs.haskellPackages;
             in
-              {
-                default = self.packages.${system}.elmHasher;
+            {
+              default = self.packages.${system}.elmHasher;
 
-                elmHasher =
-                  (import ./src/elmHasher/default.nix (haskellPackages // { lib = pkgs.lib; }))
-                  //
-                  {
-                    meta = {
-                      description = "A program to fetch and hash all elm packages";
-                      homepage = homepage;
-                      changelog = changelog;
-                      license = pkgs.lib.licenses.mit;
-                    };
+              elmHasher =
+                (import ./src/elmHasher/default.nix (haskellPackages // { lib = pkgs.lib; }))
+                //
+                {
+                  meta = {
+                    description = "A program to fetch and hash all elm packages";
+                    homepage = homepage;
+                    changelog = changelog;
+                    license = pkgs.lib.licenses.mit;
                   };
+                };
 
-                elmHashes =
-                  pkgs.stdenvNoCC.mkDerivation {
-                    name = "elmHashes";
-                    src = ./mkElmDerivation;
-                    installPhase = "mkdir $out; cp elm-hashes.json $out";
-                    meta = {
-                      description = "A JSON of elm packages and their hashes";
-                      homepage = homepage;
-                      changelog = changelog;
-                      license = pkgs.lib.licenses.mit;
-                    };
+              elmHashes =
+                pkgs.stdenvNoCC.mkDerivation {
+                  name = "elmHashes";
+                  src = ./mkElmDerivation;
+                  installPhase = "mkdir $out; cp elm-hashes.json $out";
+                  meta = {
+                    description = "A JSON of elm packages and their hashes";
+                    homepage = homepage;
+                    changelog = changelog;
+                    license = pkgs.lib.licenses.mit;
                   };
-              }
+                };
+            }
           );
 
       # These require IFD. Use these for development, but not
@@ -153,25 +155,25 @@
             pkgs =
               nixpkgsFor.${system};
           in
-            {
-              basic =
-                import ./tests/basic/default.nix {
-                  mkElmDerivation = mkElmDerivation pkgs;
-                  elm = pkgs.elmPackages.elm;
-                };
+          {
+            basic =
+              import ./tests/basic/default.nix {
+                mkElmDerivation = mkElmDerivation pkgs;
+                elm = pkgs.elmPackages.elm;
+              };
 
-              custom =
-                import ./tests/custom/default.nix {
-                  mkElmDerivation = mkElmDerivation pkgs;
-                };
+            custom =
+              import ./tests/custom/default.nix {
+                mkElmDerivation = mkElmDerivation pkgs;
+              };
 
-              elm-optimize-level-2 =
-                import ./tests/elm-level-2/default.nix {
-                  mkElmDerivation = mkElmDerivation pkgs;
-                  elm-optimize-level-2 = pkgs.elmPackages.elm-optimize-level-2;
-                  elm = pkgs.elmPackages.elm;
-                };
-            }
+            elm-optimize-level-2 =
+              import ./tests/elm-level-2/default.nix {
+                mkElmDerivation = mkElmDerivation pkgs;
+                elm-optimize-level-2 = pkgs.elmPackages.elm-optimize-level-2;
+                elm = pkgs.elmPackages.elm;
+              };
+          }
         );
 
       devShell =
@@ -183,19 +185,19 @@
             haskellPackages =
               pkgs.haskellPackages;
           in
-            haskellPackages.shellFor {
-              packages = p: [
-                self.packages.${system}.elmHasher
+          haskellPackages.shellFor {
+            packages = p: [
+              self.packages.${system}.elmHasher
+            ];
+            nativeBuildInputs = with haskellPackages;
+              [
+                # haskell-language-server
+                cabal-install
               ];
-              nativeBuildInputs = with haskellPackages;
-                [
-                  # haskell-language-server
-                  cabal-install
-                ];
 
-              # Enables Hoogle for the builtin packages.
-              withHoogle = true;
-            }
+            # Enables Hoogle for the builtin packages.
+            withHoogle = true;
+          }
         );
     };
 }

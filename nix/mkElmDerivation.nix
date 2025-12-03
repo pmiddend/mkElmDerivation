@@ -1,4 +1,4 @@
-{ stdenv, elm, lib, uglify-js, snapshot, allPackagesJsonPath, elmHashesJsonPath }:
+{ stdenv, elm, lib, terser, snapshot, allPackagesJsonPath, elmHashesJsonPath }:
 {
   # This set is passed into a mkDerivation call. It needs a pname and
   # version, or just a name.
@@ -30,7 +30,7 @@
   # code?
   # 0 - Level 0: No optimization,
   # 1 - Level 1: Elm's own optimization only (elm make --optimize),
-  # 2 - Level 1 and uglifyjs's minification. This is the most
+  # 2 - Level 1 and terser's minification. This is the most
   # optimized and is only  available for JavaScript code.
 , optimizationLevel ? 2
 
@@ -54,8 +54,9 @@ let
 
   # The elm make command with optimization added if requested.
   elmMakeCommand = target:
-    let basename = builtins.baseNameOf target;
-        dotElmFreeBasename = lib.removeSuffix ".elm" basename;
+    let
+      basename = builtins.baseNameOf target;
+      dotElmFreeBasename = lib.removeSuffix ".elm" basename;
     in
     ''
       echo "compiling ${target}"
@@ -63,18 +64,18 @@ let
       ${outputCommand dotElmFreeBasename} \
       ${optimizeCommand} \
       ${docsCommand dotElmFreeBasename}
-      ${uglifyjsCommand dotElmFreeBasename}
+      ${terserCommand dotElmFreeBasename}
     '';
 
   # Command to minimize the elm output further.
-  uglifyjsCommand = dotElmFreeBasename:
+  terserCommand = dotElmFreeBasename:
     if optimizationLevel == 2 && outputJavaScript
     then ''
       echo "optimizing ${dotElmFreeBasename}.${extension}"
 
-      uglifyjs $out/${dotElmFreeBasename}.${extension} \
+      terser $out/${dotElmFreeBasename}.${extension} \
       --compress 'pure_funcs=[F2,F3,F4,F5,F6,F7,F8,F9,A2,A3,A4,A5,A6,A7,A8,A9],pure_getters,keep_fargs=false,unsafe_comps,unsafe' \
-      | uglifyjs --mangle --output $out/${dotElmFreeBasename}.min.${extension}
+      | terser --mangle --output $out/${dotElmFreeBasename}.min.${extension}
 
       rm $out/${dotElmFreeBasename}.${extension}
     ''
@@ -87,28 +88,28 @@ stdenv.mkDerivation (args // {
     then args.nativeBuildInputs
     else
       [ elm ]
-      ++ lib.optional outputJavaScript uglify-js;
+        ++ lib.optional outputJavaScript terser;
 
   buildPhase =
     ''
-    runHook preBuild
-    ${(import ./lib.nix {inherit stdenv lib snapshot allPackagesJsonPath;}).mkDotElmCommand elmHashesJsonPath elmJson}
-    ${if builtins.hasAttr "buildPhase" args
-      then args.buildPhase
-      else
-        ''
-        ${makeDocsDirectory}
-        ${builtins.concatStringsSep "\n" (builtins.map elmMakeCommand targets)}
-        ''}
-    runHook postBuild
+      runHook preBuild
+      ${(import ./lib.nix {inherit stdenv lib snapshot allPackagesJsonPath;}).mkDotElmCommand elmHashesJsonPath elmJson}
+      ${if builtins.hasAttr "buildPhase" args
+        then args.buildPhase
+        else
+          ''
+          ${makeDocsDirectory}
+          ${builtins.concatStringsSep "\n" (builtins.map elmMakeCommand targets)}
+          ''}
+      runHook postBuild
     '';
 
   installPhase =
     if builtins.hasAttr "installPhase" args
     then args.installPhase
     else
-    ''
-    runHook preInstall
-    runHook postInstall
-    '';
+      ''
+        runHook preInstall
+        runHook postInstall
+      '';
 })
